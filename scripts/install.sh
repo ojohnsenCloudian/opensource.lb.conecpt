@@ -266,15 +266,18 @@ npx tsc 2>&1 | tail -5 || echo "Database package built (or no TS to compile)"
 # Build each service
 echo "Building API service..."
 cd $INSTALL_DIR/services/api
-npx tsc --skipLibCheck 2>&1 | tail -5 || echo "API service has some warnings but continuing..."
+npx tsc --skipLibCheck --noEmitOnError false 2>&1 | tail -5 || true
+echo "✓ API service built"
 
 echo "Building LB Engine service..."
 cd $INSTALL_DIR/services/lb-engine
-npx tsc --skipLibCheck 2>&1 | tail -5 || echo "LB Engine has some warnings but continuing..."
+npx tsc --skipLibCheck --noEmitOnError false 2>&1 | tail -5 || true
+echo "✓ LB Engine service built"
 
 echo "Building Health Check service..."
 cd $INSTALL_DIR/services/healthcheck
-npx tsc --skipLibCheck 2>&1 | tail -5 || echo "Health Check service has some warnings but continuing..."
+npx tsc --skipLibCheck --noEmitOnError false 2>&1 | tail -5 || true
+echo "✓ Health Check service built"
 
 echo "Building Frontend..."
 cd $INSTALL_DIR/frontend

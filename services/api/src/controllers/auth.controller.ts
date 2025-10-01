@@ -26,10 +26,10 @@ export class AuthController {
       }
 
       // Generate token
-      const jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
-      const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
+      const jwtSecret: string = process.env.JWT_SECRET || 'your-secret-key';
+      const expiresIn: string = process.env.JWT_EXPIRES_IN || '24h';
       
-      const token = jwt.sign({ userId: user.id }, jwtSecret, { expiresIn });
+      const token = jwt.sign({ userId: user.id }, jwtSecret, { expiresIn: expiresIn });
 
       // Create session
       const expiresAt = new Date();
