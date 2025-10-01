@@ -449,6 +449,22 @@ else
 fi
 
 systemctl daemon-reload
+
+# Copy and setup VIP manager script
+echo "Setting up VIP manager..."
+cp $INSTALL_DIR/scripts/vip-manager.sh /opt/lb-app/scripts/ 2>/dev/null || {
+  echo "Copying VIP manager from project root..."
+  cp $PROJECT_ROOT/scripts/vip-manager.sh /opt/lb-app/scripts/
+}
+chmod +x /opt/lb-app/scripts/vip-manager.sh
+
+# Configure sudo permissions for lb-app user to manage VIPs
+echo "Configuring sudo permissions for VIP management..."
+cat > /etc/sudoers.d/lb-app-vip << 'EOF'
+# Allow lb-app user to manage VIP addresses
+lb-app ALL=(ALL) NOPASSWD: /opt/lb-app/scripts/vip-manager.sh
+EOF
+chmod 440 /etc/sudoers.d/lb-app-vip
 echo "✓ Systemd services installed"
 
 echo ""

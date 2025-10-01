@@ -20,5 +20,9 @@ vipRouter.post(
   controller.create.bind(controller)
 );
 
+vipRouter.post('/:id/activate', controller.activate.bind(controller));
+
+vipRouter.post('/:id/deactivate', controller.deactivate.bind(controller));
+
 vipRouter.delete('/:id', controller.delete.bind(controller));
 

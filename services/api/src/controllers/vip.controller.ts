@@ -75,6 +75,117 @@ export class VipController {
     }
   }
 
+  async activate(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const vip = await prisma.virtualIP.findUnique({
+        where: { id },
+      });
+
+      if (!vip) {
+        return res.status(404).json({ error: 'VIP not found' });
+      }
+
+      if (vip.active) {
+        return res.status(400).json({ error: 'VIP is already active' });
+      }
+
+      // Activate VIP on system
+      try {
+        await this.activateVip(vip.ipAddress, vip.interface);
+        
+        await prisma.virtualIP.update({
+          where: { id },
+          data: { active: true },
+        });
+
+        await prisma.log.create({
+          data: {
+            level: 'info',
+            category: 'system',
+            message: `VIP activated: ${vip.ipAddress}`,
+          },
+        });
+
+        res.json({ message: 'VIP activated successfully', active: true });
+      } catch (error) {
+        await prisma.log.create({
+          data: {
+            level: 'error',
+            category: 'system',
+            message: `Failed to activate VIP ${vip.ipAddress}: ${error}`,
+          },
+        });
+        
+        res.status(500).json({ error: `Failed to activate VIP: ${error}` });
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to activate VIP' });
+    }
+  }
+
+  async deactivate(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const vip = await prisma.virtualIP.findUnique({
+        where: { id },
+      });
+
+      if (!vip) {
+        return res.status(404).json({ error: 'VIP not found' });
+      }
+
+      if (!vip.active) {
+        return res.status(400).json({ error: 'VIP is not active' });
+      }
+
+      // Check if VIP is used by any load balancer
+      const lbCount = await prisma.loadBalancer.count({
+        where: { vipId: id, enabled: true },
+      });
+
+      if (lbCount > 0) {
+        return res.status(400).json({
+          error: 'Cannot deactivate VIP that is used by active load balancers',
+        });
+      }
+
+      // Deactivate VIP on system
+      try {
+        await this.deactivateVip(vip.ipAddress, vip.interface);
+        
+        await prisma.virtualIP.update({
+          where: { id },
+          data: { active: false },
+        });
+
+        await prisma.log.create({
+          data: {
+            level: 'info',
+            category: 'system',
+            message: `VIP deactivated: ${vip.ipAddress}`,
+          },
+        });
+
+        res.json({ message: 'VIP deactivated successfully', active: false });
+      } catch (error) {
+        await prisma.log.create({
+          data: {
+            level: 'error',
+            category: 'system',
+            message: `Failed to deactivate VIP ${vip.ipAddress}: ${error}`,
+          },
+        });
+        
+        res.status(500).json({ error: `Failed to deactivate VIP: ${error}` });
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to deactivate VIP' });
+    }
+  }
+
   async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
@@ -136,16 +247,23 @@ export class VipController {
   }
 
   private async activateVip(ipAddress: string, iface: string): Promise<void> {
-    // Add IP alias to interface
-    // Note: This requires appropriate permissions
-    const command = `ip addr add ${ipAddress}/32 dev ${iface}`;
-    await execAsync(command);
+    // Use the VIP manager script with sudo
+    const command = `sudo /opt/lb-app/scripts/vip-manager.sh ${ipAddress} ${iface} activate`;
+    const { stdout, stderr } = await execAsync(command);
+    
+    if (stderr && !stderr.includes('already assigned')) {
+      throw new Error(`VIP activation failed: ${stderr}`);
+    }
   }
 
   private async deactivateVip(ipAddress: string, iface: string): Promise<void> {
-    // Remove IP alias from interface
-    const command = `ip addr del ${ipAddress}/32 dev ${iface}`;
-    await execAsync(command);
+    // Use the VIP manager script with sudo
+    const command = `sudo /opt/lb-app/scripts/vip-manager.sh ${ipAddress} ${iface} deactivate`;
+    const { stdout, stderr } = await execAsync(command);
+    
+    if (stderr && !stderr.includes('not assigned')) {
+      throw new Error(`VIP deactivation failed: ${stderr}`);
+    }
   }
 }
 
