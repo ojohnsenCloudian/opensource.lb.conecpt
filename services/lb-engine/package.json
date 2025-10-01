@@ -9,7 +9,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@lb-app/database": "workspace:*",
+    "@lb-app/database": "file:../../packages/database",
     "dotenv": "^16.3.1"
   },
   "devDependencies": {

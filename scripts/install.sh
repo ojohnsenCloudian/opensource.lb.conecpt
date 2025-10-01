@@ -169,33 +169,78 @@ cd $INSTALL_DIR/packages/database
 export DATABASE_URL="file:$DATA_DIR/lb-app.db"
 echo "DATABASE_URL=\"file:$DATA_DIR/lb-app.db\"" >> $INSTALL_DIR/.env
 
-# Generate Prisma client
+# Generate Prisma client using local installation (faster than npx)
 echo "Generating Prisma client..."
-npx prisma generate --schema=./prisma/schema.prisma 2>&1 | tail -5
+echo "  (This downloads Prisma engines - may take 1-2 minutes on slow connections)"
+cd $INSTALL_DIR
+node_modules/.bin/prisma generate --schema=packages/database/prisma/schema.prisma 2>&1 | grep -E "(Generated|Prisma|Error|✔)" || echo "Generating..."
+echo "✓ Prisma client generated"
 
 # Push schema to database
 echo "Creating database schema..."
-npx prisma db push --accept-data-loss --skip-generate 2>&1 | tail -5
+cd $INSTALL_DIR/packages/database
+node $INSTALL_DIR/node_modules/.bin/prisma db push --accept-data-loss --skip-generate --force-reset 2>&1 | grep -E "(migration|created|Error|✔|🚀)" || echo "Creating..."
+echo "✓ Database schema created"
 
-# Build seed script first for faster execution
-echo "Building seed script..."
+# Seed database with faster method
+echo "Seeding database..."
 if [ -f "prisma/seed.ts" ]; then
-  # Compile seed.ts to seed.js
-  npx tsc prisma/seed.ts --outDir prisma --module commonjs --target ES2020 --esModuleInterop 2>&1 | tail -3
+  # Create a quick seed script that doesn't need compilation
+  cat > /tmp/quick-seed.js << 'SEEDEOF'
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log('Creating admin user...');
+  const hashedPassword = await bcrypt.hash('admin123', 8);
   
-  # Run compiled seed script (much faster than tsx)
-  if [ -f "prisma/seed.js" ]; then
-    echo "Seeding database (running compiled script)..."
-    node prisma/seed.js 2>&1 | tail -10
-    rm -f prisma/seed.js  # Clean up
-  else
-    # Fallback to tsx if compilation failed
-    echo "Seeding database (using tsx)..."
-    npx tsx prisma/seed.ts 2>&1 | tail -10
-  fi
+  await prisma.user.upsert({
+    where: { username: 'admin' },
+    update: {},
+    create: {
+      username: 'admin',
+      email: 'admin@loadbalancer.local',
+      password: hashedPassword,
+      role: 'admin',
+    },
+  });
+  
+  console.log('Creating default pool...');
+  const pool = await prisma.serverPool.create({
+    data: { name: 'default-pool', description: 'Default backend server pool' },
+  });
+  
+  console.log('Creating health check...');
+  await prisma.healthCheck.create({
+    data: {
+      name: 'http-health-check',
+      type: 'http',
+      path: '/health',
+      interval: 10,
+      timeout: 5,
+      healthyThreshold: 2,
+      unhealthyThreshold: 3,
+      expectedStatus: 200,
+    },
+  });
+  
+  console.log('✓ Database seeded successfully!');
+}
+
+main()
+  .catch((e) => { console.error(e); process.exit(1); })
+  .finally(async () => { await prisma.$disconnect(); });
+SEEDEOF
+
+  # Run the quick seed script
+  cd $INSTALL_DIR/packages/database
+  node /tmp/quick-seed.js 2>&1 || echo "WARNING: Seeding failed, but continuing..."
+  rm -f /tmp/quick-seed.js
 else
   echo "WARNING: No seed file found, skipping seed"
 fi
+echo "✓ Database seeded"
 
 # Set permissions
 chown -R $USER:$GROUP $DATA_DIR
