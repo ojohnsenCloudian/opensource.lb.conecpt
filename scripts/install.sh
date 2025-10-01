@@ -12,6 +12,37 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# Get VM IP address for frontend configuration
+echo "Configuration Setup:"
+echo "==================="
+echo ""
+
+# Try to auto-detect the primary IP address
+AUTO_IP=$(hostname -I | awk '{print $1}' 2>/dev/null)
+
+if [ -n "$AUTO_IP" ]; then
+  echo "Auto-detected IP address: $AUTO_IP"
+  read -p "Use this IP address for the frontend? (y/n) [y]: " USE_AUTO_IP
+  USE_AUTO_IP=${USE_AUTO_IP:-y}
+  
+  if [ "$USE_AUTO_IP" = "y" ] || [ "$USE_AUTO_IP" = "Y" ]; then
+    VM_IP=$AUTO_IP
+  else
+    read -p "Enter the IP address of this VM (for frontend access): " VM_IP
+  fi
+else
+  read -p "Enter the IP address of this VM (for frontend access): " VM_IP
+fi
+
+# Validate IP address
+if ! echo "$VM_IP" | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' > /dev/null; then
+  echo "Invalid IP address format. Please enter a valid IP address."
+  exit 1
+fi
+
+echo "Using IP address: $VM_IP"
+echo ""
+
 # Get the directory where the script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -331,14 +362,12 @@ echo "✓ Health Check service built"
 echo "Building Frontend..."
 cd $INSTALL_DIR/frontend
 
-# Ensure .env.local exists for frontend
-if [ ! -f .env.local ]; then
-  echo "Creating .env.local for frontend..."
-  cat > .env.local << 'EOF'
-NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
-NEXT_PUBLIC_WS_URL=ws://localhost:4000
+# Ensure .env.local exists for frontend with correct VM IP
+echo "Creating .env.local for frontend with VM IP: $VM_IP"
+cat > .env.local << EOF
+NEXT_PUBLIC_API_URL=http://$VM_IP:4000/api/v1
+NEXT_PUBLIC_WS_URL=ws://$VM_IP:4000
 EOF
-fi
 
 # Clean and reinstall frontend dependencies to ensure everything is fresh
 echo "Reinstalling frontend dependencies..."
@@ -358,11 +387,14 @@ fi
 # Always ensure the correct systemd service file is in place
 echo "Setting up systemd service for $FRONTEND_MODE mode..."
 if [ "$FRONTEND_MODE" = "production" ]; then
-  # Use the standard production service file
+  # Use the standard production service file with VM IP
   cp $INSTALL_DIR/systemd/lb-frontend.service /etc/systemd/system/
+  # Update the service file with the correct VM IP
+  sed -i "s|http://0.0.0.0:4000|http://$VM_IP:4000|g" /etc/systemd/system/lb-frontend.service
+  sed -i "s|ws://0.0.0.0:4000|ws://$VM_IP:4000|g" /etc/systemd/system/lb-frontend.service
 else
   # Create development mode service file
-  cat > /etc/systemd/system/lb-frontend.service << 'EOF'
+  cat > /etc/systemd/system/lb-frontend.service << EOF
 [Unit]
 Description=Load Balancer Frontend Service
 After=network.target lb-api.service
@@ -374,8 +406,8 @@ User=lb-app
 Group=lb-app
 WorkingDirectory=/opt/lb-app/frontend
 Environment=NODE_ENV=development
-Environment=NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
-Environment=NEXT_PUBLIC_WS_URL=ws://localhost:4000
+Environment=NEXT_PUBLIC_API_URL=http://$VM_IP:4000/api/v1
+Environment=NEXT_PUBLIC_WS_URL=ws://$VM_IP:4000
 ExecStart=/usr/bin/npm run dev
 Restart=always
 RestartSec=5
@@ -486,10 +518,10 @@ fi
 
 echo ""
 echo "Access the web interface at:"
-echo "  http://$(hostname -I | awk '{print $1}'):3000"
+echo "  http://$VM_IP:3000"
 echo ""
 echo "API endpoint:"
-echo "  http://$(hostname -I | awk '{print $1}'):4000/api/v1"
+echo "  http://$VM_IP:4000/api/v1"
 echo ""
 echo "Default credentials:"
 echo "  Username: admin"

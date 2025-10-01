@@ -9,8 +9,8 @@ User=lb-app
 Group=lb-app
 WorkingDirectory=/opt/lb-app/frontend
 Environment="NODE_ENV=production"
-Environment="NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1"
-Environment="NEXT_PUBLIC_WS_URL=ws://localhost:4000"
+Environment="NEXT_PUBLIC_API_URL=http://0.0.0.0:4000/api/v1"
+Environment="NEXT_PUBLIC_WS_URL=ws://0.0.0.0:4000"
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=5
