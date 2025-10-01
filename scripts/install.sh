@@ -155,16 +155,10 @@ echo ""
 echo "Step 5: Installing Node.js dependencies..."
 cd $INSTALL_DIR
 
-# Install root dependencies
-echo "Installing root workspace dependencies..."
-npm install --omit=dev 2>&1 | grep -v "npm WARN" || true
+# For npm workspaces, we need to install everything from the root
+echo "Installing dependencies (this may take a few minutes)..."
+npm install 2>&1 | tail -20
 
-# Install package dependencies
-echo "Installing database package dependencies..."
-cd $INSTALL_DIR/packages/database
-npm install --omit=dev 2>&1 | grep -v "npm WARN" || true
-
-cd $INSTALL_DIR
 echo "✓ Dependencies installed"
 
 echo ""
@@ -177,16 +171,28 @@ echo "DATABASE_URL=\"file:$DATA_DIR/lb-app.db\"" >> $INSTALL_DIR/.env
 
 # Generate Prisma client
 echo "Generating Prisma client..."
-npx prisma generate 2>&1 | tail -5
+npx prisma generate --schema=./prisma/schema.prisma 2>&1 | tail -5
 
 # Push schema to database
 echo "Creating database schema..."
-npx prisma db push --accept-data-loss 2>&1 | tail -5
+npx prisma db push --accept-data-loss --skip-generate 2>&1 | tail -5
 
-# Seed database
-echo "Seeding database..."
+# Build seed script first for faster execution
+echo "Building seed script..."
 if [ -f "prisma/seed.ts" ]; then
-  npx tsx prisma/seed.ts 2>&1 | tail -10
+  # Compile seed.ts to seed.js
+  npx tsc prisma/seed.ts --outDir prisma --module commonjs --target ES2020 --esModuleInterop 2>&1 | tail -3
+  
+  # Run compiled seed script (much faster than tsx)
+  if [ -f "prisma/seed.js" ]; then
+    echo "Seeding database (running compiled script)..."
+    node prisma/seed.js 2>&1 | tail -10
+    rm -f prisma/seed.js  # Clean up
+  else
+    # Fallback to tsx if compilation failed
+    echo "Seeding database (using tsx)..."
+    npx tsx prisma/seed.ts 2>&1 | tail -10
+  fi
 else
   echo "WARNING: No seed file found, skipping seed"
 fi
