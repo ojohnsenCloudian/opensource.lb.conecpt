@@ -90,11 +90,13 @@ model HealthCheck {
   name               String              @unique
   type               String // http, https, tcp
   path               String? // for HTTP(S) checks
+  port               Int? // port to check (optional, defaults to service port)
   interval           Int                 @default(10) // seconds
   timeout            Int                 @default(5) // seconds
   healthyThreshold   Int                 @default(2)
   unhealthyThreshold Int                 @default(3)
   expectedStatus     Int                 @default(200) // for HTTP checks
+  expectedResponse   String? // expected response content
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   loadBalancers      LoadBalancer[]

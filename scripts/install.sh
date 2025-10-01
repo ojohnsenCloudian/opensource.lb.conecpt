@@ -229,11 +229,13 @@ async function main() {
         name: 'default-http',
         type: 'http',
         path: '/health',
+        port: 80,
         interval: 30,
         timeout: 5,
         healthyThreshold: 2,
         unhealthyThreshold: 3,
         expectedStatus: 200,
+        expectedResponse: '',
       },
     });
     console.log('✓ Default health check created:', healthCheck.name);
