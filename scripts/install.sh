@@ -195,48 +195,95 @@ if [ -f "prisma/seed.ts" ]; then
   cat > /tmp/quick-seed.js << 'SEEDEOF'
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Creating admin user...');
-  const hashedPassword = await bcrypt.hash('admin123', 8);
-  
-  await prisma.user.upsert({
-    where: { username: 'admin' },
-    update: {},
-    create: {
-      username: 'admin',
-      email: 'admin@loadbalancer.local',
-      password: hashedPassword,
-      role: 'admin',
-    },
-  });
-  
-  console.log('Creating default pool...');
-  const pool = await prisma.serverPool.create({
-    data: { name: 'default-pool', description: 'Default backend server pool' },
-  });
-  
-  console.log('Creating health check...');
-  await prisma.healthCheck.create({
-    data: {
-      name: 'http-health-check',
-      type: 'http',
-      path: '/health',
-      interval: 10,
-      timeout: 5,
-      healthyThreshold: 2,
-      unhealthyThreshold: 3,
-      expectedStatus: 200,
-    },
-  });
-  
-  console.log('✓ Database seeded successfully!');
+  try {
+    console.log('Starting database seeding...');
+    
+    // Create admin user
+    console.log('Creating admin user...');
+    const hashedPassword = await bcrypt.hash('admin123', 8);
+    
+    const adminUser = await prisma.user.upsert({
+      where: { username: 'admin' },
+      update: {
+        password: hashedPassword, // Update password in case it changed
+      },
+      create: {
+        username: 'admin',
+        email: 'admin@loadbalancer.local',
+        password: hashedPassword,
+        role: 'admin',
+      },
+    });
+    console.log('✓ Admin user created/updated:', adminUser.username);
+    
+    // Create default health check first
+    console.log('Creating default health check...');
+    const healthCheck = await prisma.healthCheck.upsert({
+      where: { name: 'default-http' },
+      update: {},
+      create: {
+        name: 'default-http',
+        type: 'http',
+        path: '/health',
+        interval: 30,
+        timeout: 5,
+        healthyThreshold: 2,
+        unhealthyThreshold: 3,
+        expectedStatus: 200,
+      },
+    });
+    console.log('✓ Default health check created:', healthCheck.name);
+    
+    // Create default server pool
+    console.log('Creating default server pool...');
+    const serverPool = await prisma.serverPool.upsert({
+      where: { name: 'default-pool' },
+      update: {},
+      create: {
+        name: 'default-pool',
+        description: 'Default backend server pool',
+      },
+    });
+    console.log('✓ Default server pool created:', serverPool.name);
+    
+    // Create a sample VIP
+    console.log('Creating sample VIP...');
+    const vip = await prisma.virtualIP.upsert({
+      where: { ipAddress: '192.168.1.100' },
+      update: {},
+      create: {
+        ipAddress: '192.168.1.100',
+        interface: 'eth0',
+        description: 'Sample VIP for testing',
+        active: false,
+      },
+    });
+    console.log('✓ Sample VIP created:', vip.ipAddress);
+    
+    console.log('✓ Database seeded successfully!');
+    console.log('Login credentials:');
+    console.log('  Username: admin');
+    console.log('  Password: admin123');
+    
+  } catch (error) {
+    console.error('✗ Seeding failed:', error.message);
+    console.error('Full error:', error);
+    process.exit(1);
+  }
 }
 
 main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(async () => { await prisma.$disconnect(); });
+  .catch((e) => { 
+    console.error('Unhandled error:', e); 
+    process.exit(1); 
+  })
+  .finally(async () => { 
+    await prisma.$disconnect(); 
+  });
 SEEDEOF
 
   # Run the quick seed script with proper module resolution
