@@ -21,9 +21,9 @@ export default function NewLoadBalancerPage() {
     listenPort: '',
     algorithm: 'roundrobin',
     serverPoolId: '',
-    vipId: '',
-    certificateId: '',
-    healthCheckId: '',
+    vipId: 'none',
+    certificateId: 'none',
+    healthCheckId: 'none',
     sessionPersistence: false,
     connectionTimeout: '5000',
     requestTimeout: '30000',
@@ -67,9 +67,9 @@ export default function NewLoadBalancerPage() {
         connectionTimeout: parseInt(formData.connectionTimeout),
         requestTimeout: parseInt(formData.requestTimeout),
         maxRetries: parseInt(formData.maxRetries),
-        vipId: formData.vipId || undefined,
-        certificateId: formData.certificateId || undefined,
-        healthCheckId: formData.healthCheckId || undefined,
+        vipId: formData.vipId === 'none' ? undefined : formData.vipId,
+        certificateId: formData.certificateId === 'none' ? undefined : formData.certificateId,
+        healthCheckId: formData.healthCheckId === 'none' ? undefined : formData.healthCheckId,
       };
 
       await api.post('/load-balancers', data);
@@ -190,7 +190,7 @@ export default function NewLoadBalancerPage() {
                     <SelectValue placeholder="Select a VIP" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {vips.map((vip) => (
                       <SelectItem key={vip.id} value={vip.id}>
                         {vip.ipAddress}
@@ -211,7 +211,7 @@ export default function NewLoadBalancerPage() {
                       <SelectValue placeholder="Select a certificate" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {certificates.map((cert) => (
                         <SelectItem key={cert.id} value={cert.id}>
                           {cert.name} ({cert.domain})
@@ -232,7 +232,7 @@ export default function NewLoadBalancerPage() {
                     <SelectValue placeholder="Select a health check" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {healthChecks.map((hc) => (
                       <SelectItem key={hc.id} value={hc.id}>
                         {hc.name} ({hc.type})
