@@ -8,7 +8,7 @@ import { logger } from './utils/logger';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.API_PORT || 4000;
+const PORT = parseInt(process.env.API_PORT || '4000', 10);
 const HOST = process.env.API_HOST || '0.0.0.0';
 
 // Middleware
@@ -34,7 +34,7 @@ app.get('/health', (req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, HOST as string, () => {
+app.listen(PORT, HOST, () => {
   logger.info(`API server running on http://${HOST}:${PORT}`);
   logger.info(`Health check: http://${HOST}:${PORT}/health`);
   logger.info(`API base URL: http://${HOST}:${PORT}/api/v1`);
