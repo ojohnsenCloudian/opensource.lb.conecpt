@@ -51,7 +51,47 @@ USER="lb-app"
 GROUP="lb-app"
 
 echo "Step 1: Installing dependencies..."
-dnf install -y nodejs npm sqlite
+
+# Remove any existing Node.js installation
+if command -v node &> /dev/null; then
+  CURRENT_VERSION=$(node -v)
+  echo "Found existing Node.js version: $CURRENT_VERSION"
+  echo "Removing old Node.js installation to ensure latest LTS version..."
+  dnf remove -y nodejs npm nodejs-docs nodejs-devel 2>/dev/null || true
+  # Clean up any remaining files
+  rm -rf /usr/bin/node /usr/bin/npm /usr/lib/node_modules 2>/dev/null || true
+fi
+
+# Install Node.js 20.x LTS (Current LTS - Iron) from official NodeSource repository
+echo "Installing Node.js 20.x LTS (Latest Stable)..."
+echo "Downloading NodeSource setup script..."
+curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+
+echo "Installing Node.js and SQLite..."
+dnf install -y nodejs sqlite
+
+# Verify installation
+echo ""
+echo "Installed versions:"
+NODE_VERSION=$(node -v)
+NPM_VERSION=$(npm -v)
+echo "  Node.js: $NODE_VERSION"
+echo "  npm: $NPM_VERSION"
+echo "  SQLite: $(sqlite3 --version 2>/dev/null || echo 'installed')"
+
+# Validate Node.js version meets requirements
+NODE_MAJOR=$(echo $NODE_VERSION | cut -d'v' -f2 | cut -d'.' -f1)
+NODE_MINOR=$(echo $NODE_VERSION | cut -d'v' -f2 | cut -d'.' -f2)
+
+if [ "$NODE_MAJOR" -lt 18 ] || ([ "$NODE_MAJOR" -eq 18 ] && [ "$NODE_MINOR" -lt 18 ]); then
+  echo ""
+  echo "ERROR: Node.js 18.18.0 or higher is required"
+  echo "Current version: $NODE_VERSION"
+  echo "Please install Node.js 18.18+ or Node.js 20.x LTS"
+  exit 1
+fi
+
+echo "✓ Node.js $NODE_VERSION meets requirements (18.18.0+)"
 
 echo ""
 echo "Step 2: Creating application user..."
