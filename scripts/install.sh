@@ -281,10 +281,65 @@ echo "✓ Health Check service built"
 
 echo "Building Frontend..."
 cd $INSTALL_DIR/frontend
-npm run build 2>&1 | tail -15 || {
-  echo "WARNING: Frontend build may have warnings"
-  echo "Check logs if web interface doesn't work: journalctl -u lb-frontend -n 50"
-}
+
+# Ensure .env.local exists for frontend
+if [ ! -f .env.local ]; then
+  echo "Creating .env.local for frontend..."
+  cat > .env.local << 'EOF'
+NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+NEXT_PUBLIC_WS_URL=ws://localhost:4000
+EOF
+fi
+
+# Clean and reinstall frontend dependencies to ensure everything is fresh
+echo "Reinstalling frontend dependencies..."
+rm -rf node_modules package-lock.json
+npm install
+
+# Build the frontend with detailed output
+echo "Building Next.js application..."
+if npm run build; then
+  echo "✓ Frontend built successfully"
+  FRONTEND_MODE="production"
+else
+  echo "✗ Frontend build failed, will use development mode"
+  FRONTEND_MODE="development"
+fi
+
+# Always ensure the correct systemd service file is in place
+echo "Setting up systemd service for $FRONTEND_MODE mode..."
+if [ "$FRONTEND_MODE" = "production" ]; then
+  # Use the standard production service file
+  cp $INSTALL_DIR/systemd/lb-frontend.service /etc/systemd/system/
+else
+  # Create development mode service file
+  cat > /etc/systemd/system/lb-frontend.service << 'EOF'
+[Unit]
+Description=Load Balancer Frontend Service
+After=network.target lb-api.service
+Wants=lb-api.service
+
+[Service]
+Type=simple
+User=lb-app
+Group=lb-app
+WorkingDirectory=/opt/lb-app/frontend
+Environment=NODE_ENV=development
+Environment=NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+Environment=NEXT_PUBLIC_WS_URL=ws://localhost:4000
+ExecStart=/usr/bin/npm run dev
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lb-frontend
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
+echo "✓ Frontend systemd service configured for $FRONTEND_MODE mode"
 
 # Set ownership
 cd $INSTALL_DIR
@@ -364,7 +419,21 @@ echo "---------------"
 systemctl is-active lb-api.service && echo "✓ lb-api: running" || echo "✗ lb-api: failed"
 systemctl is-active lb-engine.service && echo "✓ lb-engine: running" || echo "✗ lb-engine: failed"
 systemctl is-active lb-healthcheck.service && echo "✓ lb-healthcheck: running" || echo "✗ lb-healthcheck: failed"
-systemctl is-active lb-frontend.service && echo "✓ lb-frontend: running" || echo "✗ lb-frontend: failed"
+
+# Check frontend service with retry
+echo "Checking frontend service..."
+if systemctl is-active lb-frontend.service; then
+  echo "✓ lb-frontend: running"
+else
+  echo "✗ lb-frontend: failed, attempting restart..."
+  systemctl restart lb-frontend.service
+  sleep 3
+  if systemctl is-active lb-frontend.service; then
+    echo "✓ lb-frontend: running (after restart)"
+  else
+    echo "✗ lb-frontend: still failed, check logs with: journalctl -u lb-frontend -n 20"
+  fi
+fi
 
 echo ""
 echo "Access the web interface at:"
