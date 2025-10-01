@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User authentication
+model User {
+  id        String    @id @default(uuid())
+  username  String    @unique
+  email     String    @unique
+  password  String // hashed with bcrypt
+  role      String    @default("admin") // admin, viewer
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  sessions  Session[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// Virtual IP addresses
+model VirtualIP {
+  id            String         @id @default(uuid())
+  ipAddress     String         @unique
+  interface     String         @default("eth0")
+  description   String?
+  active        Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  loadBalancers LoadBalancer[]
+}
+
+// Backend server pools
+model ServerPool {
+  id            String          @id @default(uuid())
+  name          String          @unique
+  description   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  servers       BackendServer[]
+  loadBalancers LoadBalancer[]
+}
+
+// Backend servers
+model BackendServer {
+  id            String              @id @default(uuid())
+  name          String
+  ipAddress     String
+  port          Int
+  weight        Int                 @default(100) // for weighted algorithms
+  status        String              @default("unknown") // up, down, unknown
+  poolId        String
+  pool          ServerPool          @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  enabled       Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  healthResults HealthCheckResult[]
+  stats         BackendServerStat[]
+
+  @@unique([poolId, ipAddress, port])
+}
+
+// SSL Certificates
+model Certificate {
+  id            String         @id @default(uuid())
+  name          String         @unique
+  description   String?
+  domain        String // can be wildcard like *.example.com
+  certContent   String // PEM encoded certificate
+  keyContent    String // PEM encoded private key
+  chainContent  String? // Optional CA chain
+  expiresAt     DateTime
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  loadBalancers LoadBalancer[]
+}
+
+// Health Check configurations
+model HealthCheck {
+  id                 String              @id @default(uuid())
+  name               String              @unique
+  type               String // http, https, tcp
+  path               String? // for HTTP(S) checks
+  interval           Int                 @default(10) // seconds
+  timeout            Int                 @default(5) // seconds
+  healthyThreshold   Int                 @default(2)
+  unhealthyThreshold Int                 @default(3)
+  expectedStatus     Int                 @default(200) // for HTTP checks
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  loadBalancers      LoadBalancer[]
+  results            HealthCheckResult[]
+}
+
+// Load Balancer configuration
+model LoadBalancer {
+  id            String             @id @default(uuid())
+  name          String             @unique
+  description   String?
+  protocol      String // http, https, tcp
+  listenPort    Int
+  algorithm     String             @default("roundrobin") // roundrobin, leastconn, weighted, iphash
+  enabled       Boolean            @default(false)
+  vipId         String?
+  vip           VirtualIP?         @relation(fields: [vipId], references: [id])
+  certificateId String?
+  certificate   Certificate?       @relation(fields: [certificateId], references: [id])
+  serverPoolId  String
+  serverPool    ServerPool         @relation(fields: [serverPoolId], references: [id])
+  healthCheckId String?
+  healthCheck   HealthCheck?       @relation(fields: [healthCheckId], references: [id])
+  // Advanced options
+  sessionPersistence Boolean        @default(false)
+  connectionTimeout  Int            @default(5000) // milliseconds
+  requestTimeout     Int            @default(30000) // milliseconds
+  maxRetries         Int            @default(2)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  logs               Log[]
+  stats              LoadBalancerStat[]
+}
+
+// Health check results (time-series data)
+model HealthCheckResult {
+  id              String        @id @default(uuid())
+  healthCheckId   String
+  healthCheck     HealthCheck   @relation(fields: [healthCheckId], references: [id], onDelete: Cascade)
+  backendServerId String
+  backendServer   BackendServer @relation(fields: [backendServerId], references: [id], onDelete: Cascade)
+  status          String // success, failed, timeout
+  responseTime    Int? // milliseconds
+  statusCode      Int? // for HTTP checks
+  message         String?
+  timestamp       DateTime      @default(now())
+
+  @@index([backendServerId, timestamp])
+  @@index([healthCheckId, timestamp])
+}
+
+// Logs
+model Log {
+  id             String        @id @default(uuid())
+  level          String // info, warning, error
+  category       String // system, loadbalancer, healthcheck, api
+  message        String
+  metadata       String? // JSON string for additional data
+  loadBalancerId String?
+  loadBalancer   LoadBalancer? @relation(fields: [loadBalancerId], references: [id], onDelete: SetNull)
+  timestamp      DateTime      @default(now())
+
+  @@index([category, timestamp])
+  @@index([loadBalancerId, timestamp])
+  @@index([level, timestamp])
+}
+
+// Load Balancer Statistics (time-series)
+model LoadBalancerStat {
+  id             String       @id @default(uuid())
+  loadBalancerId String
+  loadBalancer   LoadBalancer @relation(fields: [loadBalancerId], references: [id], onDelete: Cascade)
+  connections    Int          @default(0)
+  requestsPerSec Float        @default(0)
+  bytesIn        Int          @default(0)
+  bytesOut       Int          @default(0)
+  avgResponseTime Int         @default(0) // milliseconds
+  errorRate      Float        @default(0) // percentage
+  timestamp      DateTime     @default(now())
+
+  @@index([loadBalancerId, timestamp])
+}
+
+// Backend Server Statistics (time-series)
+model BackendServerStat {
+  id              String        @id @default(uuid())
+  backendServerId String
+  backendServer   BackendServer @relation(fields: [backendServerId], references: [id], onDelete: Cascade)
+  connections     Int           @default(0)
+  requestsPerSec  Float         @default(0)
+  avgResponseTime Int           @default(0) // milliseconds
+  bytesIn         Int           @default(0)
+  bytesOut        Int           @default(0)
+  errorCount      Int           @default(0)
+  timestamp       DateTime      @default(now())
+
+  @@index([backendServerId, timestamp])
+}
+
+// System metrics (time-series)
+model SystemMetric {
+  id              String   @id @default(uuid())
+  cpuUsage        Float // percentage
+  memoryUsage     Float // percentage
+  memoryTotal     Int // MB
+  memoryUsed      Int // MB
+  diskUsage       Float // percentage
+  diskTotal       Int // GB
+  diskUsed        Int // GB
+  networkBytesIn  Int
+  networkBytesOut Int
+  timestamp       DateTime @default(now())
+
+  @@index([timestamp])
+}
+

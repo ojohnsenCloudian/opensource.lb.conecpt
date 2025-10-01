@@ -1,0 +1,24 @@
+[Unit]
+Description=Load Balancer Health Check Service
+After=network.target lb-api.service
+Requires=lb-api.service
+
+[Service]
+Type=simple
+User=lb-app
+Group=lb-app
+WorkingDirectory=/opt/lb-app/services/healthcheck
+Environment="NODE_ENV=production"
+Environment="DATABASE_URL=file:/opt/lb-app/data/lb-app.db"
+Environment="HEALTHCHECK_INTERVAL=10"
+Environment="HEALTHCHECK_TIMEOUT=5"
+ExecStart=/usr/bin/node /opt/lb-app/services/healthcheck/dist/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lb-healthcheck
+
+[Install]
+WantedBy=multi-user.target
+

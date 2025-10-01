@@ -1,0 +1,25 @@
+[Unit]
+Description=Load Balancer Engine Service
+After=network.target lb-api.service
+Requires=lb-api.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/lb-app/services/lb-engine
+Environment="NODE_ENV=production"
+Environment="DATABASE_URL=file:/opt/lb-app/data/lb-app.db"
+Environment="LB_CONFIG_RELOAD_INTERVAL=30"
+ExecStart=/usr/bin/node /opt/lb-app/services/lb-engine/dist/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lb-engine
+# Allow binding to privileged ports
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target
+

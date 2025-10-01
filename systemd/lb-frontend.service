@@ -1,0 +1,22 @@
+[Unit]
+Description=Load Balancer Frontend Service
+After=network.target lb-api.service
+Requires=lb-api.service
+
+[Service]
+Type=simple
+User=lb-app
+Group=lb-app
+WorkingDirectory=/opt/lb-app/frontend
+Environment="NODE_ENV=production"
+Environment="NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1"
+ExecStart=/usr/bin/node /opt/lb-app/frontend/.next/standalone/server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lb-frontend
+
+[Install]
+WantedBy=multi-user.target
+

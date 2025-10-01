@@ -1,0 +1,51 @@
+{
+  "name": "load-balancer-app",
+  "version": "1.0.0",
+  "description": "Custom Load Balancer with Management Interface for Rocky Linux 9.6",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:lb\" \"npm run dev:healthcheck\" \"npm run dev:frontend\"",
+    "dev:api": "npm run dev --workspace=services/api",
+    "dev:lb": "npm run dev --workspace=services/lb-engine",
+    "dev:healthcheck": "npm run dev --workspace=services/healthcheck",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspaces",
+    "build:api": "npm run build --workspace=services/api",
+    "build:lb": "npm run build --workspace=services/lb-engine",
+    "build:healthcheck": "npm run build --workspace=services/healthcheck",
+    "build:frontend": "npm run build --workspace=frontend",
+    "db:generate": "npm run db:generate --workspace=packages/database",
+    "db:push": "npm run db:push --workspace=packages/database",
+    "db:migrate": "npm run db:migrate --workspace=packages/database",
+    "db:studio": "npm run db:studio --workspace=packages/database",
+    "start:api": "npm run start --workspace=services/api",
+    "start:lb": "npm run start --workspace=services/lb-engine",
+    "start:healthcheck": "npm run start --workspace=services/healthcheck",
+    "start:frontend": "npm run start --workspace=frontend",
+    "install:all": "npm install && npm run db:generate",
+    "clean": "rm -rf node_modules packages/*/node_modules services/*/node_modules frontend/node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "load-balancer",
+    "reverse-proxy",
+    "high-availability",
+    "rocky-linux"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+
