@@ -452,6 +452,7 @@ systemctl daemon-reload
 
 # Copy and setup VIP manager script
 echo "Setting up VIP manager..."
+mkdir -p /opt/lb-app/scripts
 cp $INSTALL_DIR/scripts/vip-manager.sh /opt/lb-app/scripts/ 2>/dev/null || {
   echo "Copying VIP manager from project root..."
   cp $PROJECT_ROOT/scripts/vip-manager.sh /opt/lb-app/scripts/

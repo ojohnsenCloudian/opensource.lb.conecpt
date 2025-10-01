@@ -101,7 +101,7 @@ export class LoadBalancerEngine {
         });
 
         // Bind to VIP address if specified, otherwise bind to all interfaces
-        const bindAddress = config.vip?.ipAddress || '0.0.0.0';
+        const bindAddress = (typeof config.vip === 'string' ? config.vip : config.vip?.ipAddress) || '0.0.0.0';
         server.listen(config.listenPort, bindAddress, () => {
           this.logger.info(`Load balancer ${config.name} listening on ${bindAddress}:${config.listenPort}`);
           resolve();
